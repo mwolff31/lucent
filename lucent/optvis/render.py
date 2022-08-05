@@ -90,6 +90,8 @@ def render_vis(
 
         optimizer.zero_grad()
 
+        print(transform_f(image_f()).shape)
+
         emb = model.encode_image(transform_f(image_f()))
         emb = emb / emb.norm(dim=-1, keepdim=True)
 
