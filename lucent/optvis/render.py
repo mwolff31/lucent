@@ -28,7 +28,7 @@ from lucent.misc.io import show
 
 def render_vis(
     model,
-    objective_f,
+    tg_emb,
     param_f=None,
     optimizer=None,
     transforms=None,
@@ -81,12 +81,8 @@ def render_vis(
 
     transform_f = transform.compose(transforms)
 
-    hook = hook_model(model, image_f)
-    objective_f = objectives.as_objective(objective_f)
-
     if verbose:
         model(transform_f(image_f()))
-        print("Initial loss: {:.3f}".format(objective_f(hook)))
 
     images = []
     try:
@@ -94,7 +90,8 @@ def render_vis(
             def closure():
                 optimizer.zero_grad()
                 try:
-                    model(transform_f(image_f()))
+                    emb = model.encode_image(transform_f(image_f()))
+                    emb = emb / emb.norm(dim=-1, keepdim=True)
                 except RuntimeError as ex:
                     if i == 1:
                         # Only display the warning message
@@ -106,7 +103,7 @@ def render_vis(
                             "computed layers are not used in the objective function"
                             f"(exception details: '{ex}')"
                         )
-                loss = objective_f(hook)
+                loss = -1 * (emb @ tg_emb.T)
                 loss.backward()
                 return loss
                 
@@ -114,14 +111,14 @@ def render_vis(
             if i in thresholds:
                 image = tensor_to_img_array(image_f())
                 if verbose:
-                    print("Loss at step {}: {:.3f}".format(i, objective_f(hook)))
+                    print("Loss at step {}: {:.3f}".format(i, -loss.item()))
                     if show_inline:
                         show(image)
                 images.append(image)
     except KeyboardInterrupt:
         print("Interrupted optimization at step {:d}.".format(i))
         if verbose:
-            print("Loss at step {}: {:.3f}".format(i, objective_f(hook)))
+            print("Loss at step {}: {:.3f}".format(i, -loss.item()))
         images.append(tensor_to_img_array(image_f()))
 
     if save_image:
@@ -164,46 +161,3 @@ def export(tensor, image_name=None):
     if len(image.shape) == 4:
         image = np.concatenate(image, axis=1)
     Image.fromarray(image).save(image_name)
-
-
-class ModuleHook:
-    def __init__(self, module):
-        self.hook = module.register_forward_hook(self.hook_fn)
-        self.module = None
-        self.features = None
-
-    def hook_fn(self, module, input, output):
-        self.module = module
-        self.features = output
-
-    def close(self):
-        self.hook.remove()
-
-
-def hook_model(model, image_f):
-    features = OrderedDict()
-
-    # recursive hooking function
-    def hook_layers(net, prefix=[]):
-        if hasattr(net, "_modules"):
-            for name, layer in net._modules.items():
-                if layer is None:
-                    # e.g. GoogLeNet's aux1 and aux2 layers
-                    continue
-                features["_".join(prefix + [name])] = ModuleHook(layer)
-                hook_layers(layer, prefix=prefix + [name])
-
-    hook_layers(model)
-
-    def hook(layer):
-        if layer == "input":
-            out = image_f()
-        elif layer == "labels":
-            out = list(features.values())[-1].features
-        else:
-            assert layer in features, f"Invalid layer {layer}. Retrieve the list of layers with `lucent.modelzoo.util.get_model_layers(model)`."
-            out = features[layer].features
-        assert out is not None, "There are no saved feature maps. Make sure to put the model in eval mode, like so: `model.to(device).eval()`. See README for example."
-        return out
-
-    return hook

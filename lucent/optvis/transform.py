@@ -107,7 +107,7 @@ def _rads2angle(angle, units):
 def normalize():
     # ImageNet normalization for torchvision models
     # see https://pytorch.org/docs/stable/torchvision/models.html
-    normal = Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    normal = Normalize(mean=[0.48145466, 0.4578275, 0.40821073], std=[0.26862954, 0.26130258, 0.27577711])
 
     def inner(image_t):
         return torch.stack([normal(t) for t in image_t])
