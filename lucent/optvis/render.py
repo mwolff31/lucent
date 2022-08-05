@@ -85,31 +85,26 @@ def render_vis(
         model.encode_image(transform_f(image_f()))
 
     images = []
-    try:
-        for i in tqdm(range(1, max(thresholds) + 1), disable=(not progress)):
-            def closure():
-                optimizer.zero_grad()
 
-                emb = model.encode_image(transform_f(image_f()))
-                emb = emb / emb.norm(dim=-1, keepdim=True)
+    for i in tqdm(range(1, max(thresholds) + 1), disable=(not progress)):
 
-                loss = -1 * (emb @ tg_emb.T)
-                loss.backward()
-                return loss
-                
-            optimizer.step(closure)
-            if i in thresholds:
-                image = tensor_to_img_array(image_f())
-                if verbose:
-                    print("Loss at step {}: {:.3f}".format(i, -loss.item()))
-                    if show_inline:
-                        show(image)
-                images.append(image)
-    except KeyboardInterrupt:
-        print("Interrupted optimization at step {:d}.".format(i))
-        if verbose:
-            print("Loss at step {}: {:.3f}".format(i, -loss.item()))
-        images.append(tensor_to_img_array(image_f()))
+        optimizer.zero_grad()
+
+        emb = model.encode_image(transform_f(image_f()))
+        emb = emb / emb.norm(dim=-1, keepdim=True)
+
+        loss = -1 * (emb @ tg_emb.T)
+        loss.backward()
+            
+        optimizer.step()
+
+        if i in thresholds:
+            image = tensor_to_img_array(image_f())
+            if verbose:
+                print("Loss at step {}: {:.3f}".format(i, -loss.item()))
+                if show_inline:
+                    show(image)
+            images.append(image)
 
     if save_image:
         export(image_f(), image_name)
