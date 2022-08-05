@@ -93,7 +93,7 @@ def render_vis(
         emb = model.encode_image(transform_f(image_f()))
         emb = emb / emb.norm(dim=-1, keepdim=True)
 
-        loss = -1 * (emb @ tg_emb.T)
+        loss = -1 * torch.mean((emb @ tg_emb.T))
         loss.backward()
             
         optimizer.step()
